@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NS Tube Video Downloader</title>
+
+<style>
+:root{
+  --glass: rgba(255,255,255,.08);
+  --border: rgba(255,255,255,.15);
+  --green:#38b000;
+}
+
+*{box-sizing:border-box}
+
+body{
+  margin:0;
+  min-height:100vh;
+  background: linear-gradient(135deg,#0f2027,#203a43,#2c5364);
+  font-family:Arial;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  color:#fff;
+  padding:20px;
+}
+
+.card{
+  width:100%;
+  max-width:420px;
+  background:var(--glass);
+  backdrop-filter: blur(15px);
+  border:1px solid var(--border);
+  border-radius:18px;
+  padding:25px;
+  box-shadow:0 25px 50px rgba(0,0,0,.4);
+}
+
+h1{
+  text-align:center;
+  font-size:22px;
+  margin-bottom:15px;
+}
+
+input,select,button{
+  width:100%;
+  padding:13px;
+  margin-top:12px;
+  border-radius:10px;
+  border:none;
+  outline:none;
+  font-size:14px;
+}
+
+input,select{
+  background:rgba(255,255,255,.12);
+  color:#000000;
+}
+
+button{
+  background:var(--green);
+  color:#fff;
+  font-weight:600;
+  cursor:pointer;
+}
+
+button:disabled{
+  opacity:.6;
+  cursor:not-allowed;
+}
+
+.preview{
+  display:none;
+  margin-top:20px;
+  animation:fade .4s ease;
+}
+
+img{
+  width:100%;
+  border-radius:12px;
+  margin-top:10px;
+}
+
+.status{
+  text-align:center;
+  margin-top:10px;
+  font-size:14px;
+  color:#ddd;
+}
+
+/* spinner */
+.spinner{
+  width:26px;
+  height:26px;
+  border:3px solid rgba(255,255,255,.3);
+  border-top-color:#fff;
+  border-radius:50%;
+  animation:spin 1s linear infinite;
+  margin:10px auto;
+  display:none;
+}
+
+/* progress bar */
+.progress{
+  width:100%;
+  height:8px;
+  background:rgba(255,255,255,.15);
+  border-radius:10px;
+  overflow:hidden;
+  margin-top:10px;
+  display:none;
+}
+.progress div{
+  height:100%;
+  width:0%;
+  background:linear-gradient(90deg,#38b000,#70e000);
+  transition:width .4s ease;
+}
+
+@keyframes spin{
+  to{transform:rotate(360deg)}
+}
+@keyframes fade{
+  from{opacity:0;transform:translateY(10px)}
+  to{opacity:1}
+}
+
+@media(max-width:480px){
+  h1{font-size:20px}
+}
+</style>
+</head>
+
+<body>
+<div class="card">
+  <h1>NS Tube Video Downloader</h1>
+
+  <input id="url" placeholder="YouTube linkini yapıştır">
+  <button id="searchBtn" onclick="check()">Axtar</button>
+
+  <div class="spinner" id="searchSpinner"></div>
+  <div class="status" id="searchStatus"></div>
+
+  <div class="preview" id="preview">
+    <h3 id="title"></h3>
+    <img id="thumb">
+
+    <select id="format">
+      <optgroup label="MP4 (Video)">
+        <option value="mp4-360">MP4 – 360p</option>
+        <option value="mp4-720" selected>MP4 – 720p</option>
+        <option value="mp4-1080">MP4 – 1080p</option>
+      </optgroup>
+      <optgroup label="MP3 (Ses)">
+        <option value="mp3-128">MP3 – 128 kbps</option>
+        <option value="mp3-192">MP3 – 192 kbps</option>
+        <option value="mp3-320">MP3 – 320 kbps</option>
+      </optgroup>
+    </select>
+
+    <button id="downloadBtn" onclick="download()">Yüklə</button>
+
+    <div class="spinner" id="downloadSpinner"></div>
+    <div class="progress" id="progress">
+      <div id="bar"></div>
+    </div>
+
+    <div class="status" id="status"></div>
+  </div>
+</div>
+
+<script>
+let currentURL=""
+
+function check(){
+  const url=document.getElementById("url").value.trim()
+  if(!url) return
+
+  currentURL=url
+  searchStatus.innerText="Axtarılır..."
+  searchSpinner.style.display="block"
+  searchBtn.disabled=true
+
+  fetch("/info",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({url})
+  })
+  .then(r=>r.json())
+  .then(d=>{
+    preview.style.display="block"
+    title.innerText=d.title
+    thumb.src=d.thumbnail
+    searchStatus.innerText=""
+  })
+  .catch(()=>{
+    searchStatus.innerText="❌ Video tapılmadı"
+  })
+  .finally(()=>{
+    searchSpinner.style.display="none"
+    searchBtn.disabled=false
+  })
+}
+
+function download(){
+  const val=format.value
+  let type,quality,kbps
+
+  if(val.startsWith("mp4")){
+    type="mp4"
+    quality=val.split("-")[1]
+  }else{
+    type="mp3"
+    kbps=val.split("-")[1]
+  }
+
+  downloadBtn.disabled=true
+  downloadSpinner.style.display="block"
+  progress.style.display="block"
+  status.innerText="⏳ Yüklənir, zəhmət olmasa gözləyin..."
+
+  let fake=0
+  const timer=setInterval(()=>{
+    fake+=10
+    bar.style.width=fake+"%"
+    if(fake>=90) clearInterval(timer)
+  },400)
+
+  fetch("/download",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({url:currentURL,type,quality,kbps})
+  })
+  .then(r=>r.blob())
+  .then(b=>{
+    bar.style.width="100%"
+    let a=document.createElement("a")
+    a.href=URL.createObjectURL(b)
+    a.download=""
+    a.click()
+    status.innerText=""
+  })
+  .catch(()=>{
+    status.innerText="❌ Xəta baş verdi"
+  })
+  .finally(()=>{
+    downloadBtn.disabled=false
+    downloadSpinner.style.display="none"
+    setTimeout(()=>progress.style.display="none",800)
+  })
+}
+</script>
+</body>
+</html>
